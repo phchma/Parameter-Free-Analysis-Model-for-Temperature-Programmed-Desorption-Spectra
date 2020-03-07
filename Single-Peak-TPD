@@ -1,0 +1,83 @@
+%%% Produce three individual TPD single peak based on the Runge–Kutta methods
+%%% coverage-y，temperature-x，prefactor-A, E-desorption energy
+clear all;
+%%% ====================input parameters======================
+A0 = 1E+8;
+E0 = 30;
+A1 = 1E+18;
+E1 = 60;
+A2 = 1E+15;
+E2 = 50;
+y00 = 1;  % initial coverage
+y10 = 1;
+y20 = 1;
+deltax = [100:0.1:200];  % temperature range
+%%% =====================================================
+[x0,y0] = ode45(@(x0,y0) -A0.*exp(-E0.*1000./8.314./x0), deltax, y00);
+dy0dx0 = -diff(y0)./diff(x0);  %% zero order data produced by the integral form of Polanyi-Wigner equation
+[x1,y1] = ode45(@(x1,y1) -y1.^1.*A1.*exp(-E1.*1000./8.314./x1), deltax, y10);
+dy1dx1 = -diff(y1)./diff(x1);  %% first order produced by the integral form of Polanyi-Wigner equation
+[x2,y2] = ode45(@(x2,y2) -y2.^2.*A2.*exp(-E2.*1000./8.314./x2), deltax, y20);
+dy2dx2 = -diff(y2)./diff(x2);  %% second order produced by the integral form of Polanyi-Wigner equation
+figure(1);  % plot coverage-temperature 
+plot(x0,y0,'r',x1,y1,'b',x2,y2,'g');
+figure(2);
+plot(x0(2:length(x0)),dy0dx0,'r',x1(2:length(x1)),dy1dx1,'b',x2(2:length(x2)),dy2dx2,'g');;
+hold on;
+x0tot = x0(1:762);
+y0tot = y0(1:762);
+x1tot = x1(1:764);
+y1tot = y1(1:764);
+x2tot = x2(1:995);
+y2tot = y2(1:995);
+R_x0tot = 1./x0tot;
+R_x1tot = 1./x1tot;
+R_x2tot = 1./x2tot;
+%%% =========y0tot data process============================
+% if it was 0 order
+for i=1:1:(length(y0tot)-1)
+    INTEGRAL_COVE_00(i) = log(y0tot(i)-y0tot(i+1));
+end
+INTEGRAL_COVE_00 = INTEGRAL_COVE_00';
+% if it was 1st order
+for i=1:1:(length(y0tot)-1)
+    INTEGRAL_COVE_01(i) = log(log(y0tot(i))-log(y0tot(i+1)));
+end
+INTEGRAL_COVE_01 = INTEGRAL_COVE_01';
+% if it was 2nd order
+for i=1:1:(length(y0tot)-1)
+    INTEGRAL_COVE_02(i) = log(1/y0tot(i+1)-1/y0tot(i));
+end
+INTEGRAL_COVE_02 = INTEGRAL_COVE_02';
+%%% =========y1tot data process============================
+% if it was 0 order
+for i=1:1:(length(y1tot)-1)
+    INTEGRAL_COVE_10(i) = log(y1tot(i)-y1tot(i+1));
+end
+INTEGRAL_COVE_10 = INTEGRAL_COVE_10';
+% if it was 1st order
+for i=1:1:(length(y1tot)-1)
+    INTEGRAL_COVE_11(i) = log(log(y1tot(i))-log(y1tot(i+1)));
+end
+INTEGRAL_COVE_11 = INTEGRAL_COVE_11';
+% if it was 2nd order
+for i=1:1:(length(y1tot)-1)
+    INTEGRAL_COVE_12(i) = log(1/y1tot(i+1)-1/y1tot(i));
+end
+INTEGRAL_COVE_12 = INTEGRAL_COVE_12';
+%%% =========y2tot data process============================
+% if it was 0 order
+for i=1:1:(length(y2tot)-1)
+    INTEGRAL_COVE_20(i) = log(y2tot(i)-y2tot(i+1));
+end
+INTEGRAL_COVE_20 = INTEGRAL_COVE_20';
+% if it was 1st order
+for i=1:1:(length(y2tot)-1)
+    INTEGRAL_COVE_21(i) = log(log(y2tot(i))-log(y2tot(i+1)));
+end
+INTEGRAL_COVE_21 = INTEGRAL_COVE_21';
+% if it was 2nd order
+for i=1:1:(length(y2tot)-1)
+    INTEGRAL_COVE_22(i) = log(1/y2tot(i+1)-1/y2tot(i));
+end
+INTEGRAL_COVE_22 = INTEGRAL_COVE_22';
