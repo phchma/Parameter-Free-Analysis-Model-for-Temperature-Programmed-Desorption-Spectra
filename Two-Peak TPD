@@ -1,0 +1,351 @@
+%%% Step 1: 
+%%% Produce two-peak TPD result based on the Runge–Kutta methods
+%%% coverage-y，temperature-x，prefactor-A, E-desorption energy
+clear all;
+%%% ====================input parameters======================
+% first peak
+E = 40;
+A = 5E+10;
+od = 2; %  kinetic order
+y0 = 0.4;  % initial coverage
+% second peak
+E1 = 60;
+A1 = 1E+18;
+od1 = 1;
+y10 = 1.2;
+deltax = [100:0.1:250];  % temperature range
+%%% =====================================================
+[x,y] = ode45(@(x,y) -y.^od.*A.*exp(-E.*1000./8.314./x), deltax, y0);
+dydx = -diff(y)./diff(x);
+[x1,y1] = ode45(@(x1,y1) -y1.^od1.*A1.*exp(-E1.*1000./8.314./x1), deltax, y10);
+dy1dx1 = -diff(y1)./diff(x1);
+figure(1);  % plot coverage-temperature
+plot(x,y,'r',x1,y1,'b');
+hold on;
+%%% merge two peaks
+if length(x) >= length(x1)
+    xtot = x1;
+    ytot = y1 + y(1:length(y1));
+else
+    xtot = x;
+    ytot = y + y1(1:length(y));
+end
+plot(xtot,ytot,'g','linewidth',1);
+figure(2);  % plot rate-temperature
+clear s; 
+if length(dydx) >= length(dy1dx1)
+    s = dy1dx1;
+    s(length(dy1dx1)+1:length(dydx),1) = 0;
+    plot(x(1:length(x)-1),dydx,'r',x1(1:length(x1)-1),dy1dx1,'b',x(1:length(x)-1),s+dydx,'g','linewidth',1);
+else
+    s = dydx;  
+    s(length(dydx)+1:length(dy1dx1),1) = 0;  
+    plot(x(1:length(x)-1),dydx,'r',x1(1:length(x1)-1),dy1dx1,'b',x1(1:length(x1)-1),s+dy1dx1,'g','linewidth',1);    
+end
+%%% =========data process for next step============================    
+R_xtot = 1./xtot;
+% if it was 0 order
+for i=1:1:(length(ytot)-1)
+    INTEGRAL_COVE_0(i) = log(ytot(i)-ytot(i+1));
+end
+INTEGRAL_COVE_0 = INTEGRAL_COVE_0';
+% if it was 1st order
+for i=1:1:(length(ytot)-1)
+    INTEGRAL_COVE_1(i) = log(log(ytot(i))-log(ytot(i+1)));
+end
+INTEGRAL_COVE_1 = INTEGRAL_COVE_1';
+% if it was 2nd order
+for i=1:1:(length(ytot)-1)
+    INTEGRAL_COVE_2(i) = log(1/ytot(i+1)-1/ytot(i));
+end
+INTEGRAL_COVE_2 = INTEGRAL_COVE_2';
+
+%%% Step 2: 
+%%% Predict the data
+% receive the data from Step 1
+% xtot-temperature; ytot-coverage; R_tot-reciprocal of temperature
+% INTEGRAL_COVE_0-after data process if it was 0 order
+% INTEGRAL_COVE_1-after data process if it was 1st order
+% INTEGRAL_COVE_2-after data process if it was 2nd order
+%%%===========input parameters======================
+% segement length = 100, which means 10℃ in this case
+SEG = 100;
+% step = 20, which means 2℃ in this case
+STEP = 20;
+%%%============================================
+% CYC-calculate the number of cycles
+NUM = length(R_xtot); 
+NUM = NUM-2*STEP;   
+if NUM >= SEG
+    CYC = fix((NUM-SEG)/STEP)+1;
+else
+    CYC = 0;
+end
+%-------------------------------------------
+% for 2nd order
+% create txt file
+fp=fopen('Output_2nd_order_prediction.txt','w+');
+fprintf(fp,'This model calculation runs for 2nd order prediction\n');
+fprintf(fp,'Segment = \t %d\n',SEG);
+fprintf(fp,'Step = \t %d\n',STEP);
+fprintf(fp,'Cycle\tStarting Temp\tEnding Temp\tEads\tA\tR2\n');
+for j = 1:1:CYC
+    clear X;
+    clear Y;
+    clear tX;
+    for i=1:1:SEG
+        X(i) = R_xtot(STEP*j+i);
+        Y(i) = INTEGRAL_COVE_2(STEP*j+i-1);  
+    end
+    X = X';
+    Y = Y';
+    tX = X; 
+    X = [ones(length(Y),1),X];
+    [b,bint,r,rint,stats] = regress(Y,X);
+    Eads = b(2)*(-8.314)/1000; 
+    A = exp(b(1)-log(xtot(i)-xtot(i-1)));
+    R2 = stats(1);
+     % Cycle number
+     % Start temperaute of present cycle
+     % End temperaute of present cycle
+     % Eds of present cycle
+     % A of present cycle
+     % R2 of present cycle
+    fprintf(fp,'%d\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n',j,1/tX(1),1/tX(i),Eads,A,R2);
+end
+fprintf(fp,'DONE!\n');
+fclose(fp);
+%-------------------------------------------
+% for 1st order
+% create txt file
+fp=fopen('Output_1st_order_prediction.txt','w+');
+fprintf(fp,'This model calculation runs for 1st order prediction\n');
+fprintf(fp,'Segment = \t %d\n',SEG);
+fprintf(fp,'Step = \t %d\n',STEP);
+fprintf(fp,'Cycle\tStarting Temp\tEnding Temp\tEads\tA\tR2\n');
+for j = 1:1:CYC
+    clear X;
+    clear Y;
+    clear tX;
+    for i=1:1:SEG
+        X(i) = R_xtot(STEP*j+i);
+        Y(i) = INTEGRAL_COVE_1(STEP*j+i-1);  
+    end
+    X = X';
+    Y = Y';
+    tX = X; 
+    X = [ones(length(Y),1),X];
+    [b,bint,r,rint,stats] = regress(Y,X);
+    Eads = b(2)*(-8.314)/1000; % transfer energy unit kJ/mol
+    A = exp(b(1)-log(xtot(i)-xtot(i-1)));
+    R2 = stats(1);
+     % Cycle number
+     % Start temperaute of present cycle
+     % End temperaute of present cycle
+     % Eds of present cycle
+     % A of present cycle
+     % R2 of present cycle
+    fprintf(fp,'%d\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n',j,1/tX(1),1/tX(i),Eads,A,R2);
+end
+fprintf(fp,'DONE!\n');
+fclose(fp);
+%-------------------------------------------
+% for zero order
+% create txt file
+fp=fopen('Output_0_order_prediction.txt','w+');
+fprintf(fp,'This model calculation runs for Zero order prediction\n');
+fprintf(fp,'Segment = \t %d\n',SEG);
+fprintf(fp,'Step = \t %d\n',STEP);
+fprintf(fp,'Cycle\tStarting Temp\tEnding Temp\tEads\tA\tR2\n');
+for j = 1:1:CYC
+    clear X;
+    clear Y;
+    clear tX;
+    for i=1:1:SEG
+        X(i) = R_xtot(STEP*j+i);
+        Y(i) = INTEGRAL_COVE_0(STEP*j+i-1);  
+    end
+    X = X';
+    Y = Y';
+    tX = X; 
+    X = [ones(length(Y),1),X];
+    [b,bint,r,rint,stats] = regress(Y,X);
+    Eads = b(2)*(-8.314)/1000; % transfer energy unit kJ/mol
+    A = exp(b(1)-log(xtot(i)-xtot(i-1)));
+    R2 = stats(1);
+     % Cycle number
+     % Start temperaute of present cycle
+     % End temperaute of present cycle
+     % Eds of present cycle
+     % A of present cycle
+     % R2 of present cycle
+    fprintf(fp,'%d\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n',j,1/tX(1),1/tX(i),Eads,A,R2);
+end
+fprintf(fp,'DONE!\n');
+fclose(fp);
+
+%%% Step 3:
+% based on the prediction E, A and kinetic order from Step 2,
+% Step 3 subtract the simulated coverage from the original result
+%%%===========input parameters======================
+% c is short for correction, the data comes from analysis results of Step 2
+Ec = 40.0078;
+Ac = 4.9771E+10;
+odc = 2;
+deltaxc = xtot;  
+yc0 = 0.4;  % assumed initial coverage 
+%%%============================================
+[xc,yc] = ode45(@(xc,yc) -yc.^odc.*Ac.*exp(-Ec.*1000./8.314./xc), deltaxc, yc0);
+dycdxc = -diff(yc)./diff(xc);
+% r denotes for remained
+xr = xtot;  
+clear s;
+if length(ytot) >= length(yc)
+    s = yc;
+    s(length(yc)+1:length(ytot)) = 0;
+    yr = ytot-s;    
+else
+    s = yc(1:length(ytot));
+    yr = ytot-s;
+end
+figure();  % plot coverage-temperature
+plot(xc,yc,'r',xr,yr,'b',xtot,ytot,'g','linewidth',2);
+xlabel('Temperature');
+ylabel('Coverage');
+legend('Correct','After-sub','Original');
+
+%%% Step 4: 
+% receive the remained curve from Step 3, and re-predict again
+R_xr = 1./xr;
+clear INTEGRAL_COVE_0;
+clear INTEGRAL_COVE_1;
+clear INTEGRAL_COVE_2;
+% if it is 0 order
+for i=1:1:(length(yr)-1)
+    INTEGRAL_COVE_0(i) = log(yr(i)-yr(i+1));
+end
+    INTEGRAL_COVE_0 = INTEGRAL_COVE_0';
+% if it is 1st order
+for i=1:1:(length(yr)-1)
+    INTEGRAL_COVE_1(i) = log(log(yr(i))-log(yr(i+1)));
+end
+INTEGRAL_COVE_1 = INTEGRAL_COVE_1';
+% if it is 2nd order
+for i=1:1:(length(yr)-1)
+    INTEGRAL_COVE_2(i) = log(1/yr(i+1)-1/yr(i));
+end
+INTEGRAL_COVE_2 = INTEGRAL_COVE_2';
+%%%=================================
+% segement length = 50, which means 10℃ in this case
+SEG = 100;
+% step = 10, which means 1℃ in this case
+STEP = 20;
+NUM = length(R_xr); 
+NUM = NUM-2*STEP;
+if NUM >= SEG
+    CYC = fix((NUM-SEG)/STEP)+1;
+else
+    CYC = 0;
+end
+%-------------------------------------------
+% for 2nd order
+% create txt file
+fp=fopen('Output_2nd_order_new_prediction.txt','w+');
+fprintf(fp,'This model calculation runs for 2nd order new prediction\n');
+fprintf(fp,'Segment = \t %d\n',SEG);
+fprintf(fp,'Step = \t %d\n',STEP);
+fprintf(fp,'Cycle\tStarting Temp\tEnding Temp\tEads\tA\tR2\n');
+for j = 1:1:CYC
+    clear X;
+    clear Y;
+    clear tX;
+    for i=1:1:SEG
+        X(i) = R_xr(STEP*j+i);
+        Y(i) = INTEGRAL_COVE_2(STEP*j+i-1);  
+    end
+    X = X';
+    Y = Y';
+    tX = X; 
+    X = [ones(length(Y),1),X];
+    [b,bint,r,rint,stats] = regress(Y,X);
+    Eads = b(2)*(-8.314)/1000; 
+    A = exp(b(1)-log(xr(i)-xr(i-1)));
+    R2 = stats(1);
+     % Cycle number
+     % Start temperaute of present cycle
+     % End temperaute of present cycle
+     % Eds of present cycle
+     % A of present cycle
+     % R2 of present cycle
+    fprintf(fp,'%d\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n',j,1/tX(1),1/tX(i),Eads,A,R2);
+end
+fprintf(fp,'DONE!\n');
+fclose(fp);
+%-------------------------------------------
+% for 1st order
+% create txt file
+fp=fopen('Output_1st_order_new_prediction.txt','w+');
+fprintf(fp,'This model calculation runs for 1st order new prediction\n');
+fprintf(fp,'Segment = \t %d\n',SEG);
+fprintf(fp,'Step = \t %d\n',STEP);
+fprintf(fp,'Cycle\tStarting Temp\tEnding Temp\tEads\tA\tR2\n');
+for j = 1:1:CYC
+    clear X;
+    clear Y;
+    clear tX;
+    for i=1:1:SEG
+        X(i) = R_xr(STEP*j+i);
+        Y(i) = INTEGRAL_COVE_1(STEP*j+i-1);  
+    end
+    X = X';
+    Y = Y';
+    tX = X;
+    X = [ones(length(Y),1),X];
+    [b,bint,r,rint,stats] = regress(Y,X);
+    Eads = b(2)*(-8.314)/1000; 
+    A = exp(b(1)-log(xr(i)-xr(i-1)));
+    R2 = stats(1);
+     % Cycle number
+     % Start temperaute of present cycle
+     % End temperaute of present cycle
+     % Eds of present cycle
+     % A of present cycle
+     % R2 of present cycle
+    fprintf(fp,'%d\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n',j,1/tX(1),1/tX(i),Eads,A,R2);
+end
+fprintf(fp,'DONE!\n');
+fclose(fp);
+%-------------------------------------------
+% for zero order
+% create txt file
+fp=fopen('Output_0_order_new_prediction.txt','w+');
+fprintf(fp,'This model calculation runs for Zero order new prediction\n');
+fprintf(fp,'Segment = \t %d\n',SEG);
+fprintf(fp,'Step = \t %d\n',STEP);
+fprintf(fp,'Cycle\tStarting Temp\tEnding Temp\tEads\tA\tR2\n');
+for j = 1:1:CYC
+    clear X;
+    clear Y;
+    clear tX;
+    for i=1:1:SEG
+        X(i) = R_xr(STEP*j+i);
+        Y(i) = INTEGRAL_COVE_0(STEP*j+i-1);  
+    end
+    X = X';
+    Y = Y';
+    tX = X; 
+    X = [ones(length(Y),1),X];
+    [b,bint,r,rint,stats] = regress(Y,X);
+    Eads = b(2)*(-8.314)/1000; 
+    A = exp(b(1)-log(xr(i)-xr(i-1)));
+    R2 = stats(1);
+     % Cycle number
+     % Start temperaute of present cycle
+     % End temperaute of present cycle
+     % Eds of present cycle
+     % A of present cycle
+     % R2 of present cycle
+    fprintf(fp,'%d\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n',j,1/tX(1),1/tX(i),Eads,A,R2);
+end
+fprintf(fp,'DONE!\n');
+fclose(fp);
